@@ -1,11 +1,9 @@
 from setuptools import setup, find_packages
 
-exec(open('stablegarment/version.py').read())
-
 setup(
   name = 'stablegarment',
   packages = find_packages(),
-  version = __version__,
+  version = '0.1.0',
   license='cc-by-nc-4.0',
   description = 'StableGarmet Official Implementation',
   author = 'Hailong Guo',
