@@ -427,7 +427,7 @@ class StableGarmentControlNetPipeline(DiffusionPipeline):
         cloth_text_embeddings = torch.cat([cloth_text_embeddings])
         if garment_encoder is not None:
             reference_control_writer = ReferenceAttentionControl(garment_encoder, do_classifier_free_guidance=False, mode='write', fusion_blocks='midup')
-            reference_control_reader = ReferenceAttentionControl(self.unet, do_classifier_free_guidance=True, mode='read', fusion_blocks='midup')
+            reference_control_reader = ReferenceAttentionControl(self.unet, do_classifier_free_guidance=do_classifier_free_guidance, mode='read', fusion_blocks='midup')
 
         # Prepare control for controlnet
         control = self.prepare_condition(

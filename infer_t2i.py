@@ -26,8 +26,7 @@ garment_images = [garment_image,]
 prompt = ["a photo of a woman",]
 cloth_prompt = ["",]
 
-images = pipeline(prompt,cloth_prompt=cloth_prompt,
-                  height=height,width=width,
+images = pipeline(prompt,cloth_prompt=cloth_prompt,height=height,width=width,
                   num_inference_steps=30,guidance_scale=4,num_images_per_prompt=1,
                   garment_encoder=garment_encoder,garment_image=garment_images,).images
 images[0].save("results/sample.jpg")

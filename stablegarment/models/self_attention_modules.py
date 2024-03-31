@@ -22,21 +22,25 @@ class ReferenceAttentionControl():
                  reference_attn=True,
                  fusion_blocks="midup",
                  do_classifier_free_guidance=False,
+                 style_fidelity=1.,
                  ) -> None:
         self.unet = unet
-        assert mode in ["read", "write"]
-        assert fusion_blocks in ["midup", "full"]
+        assert mode in ["read", "write"], "mode must be write or read"
+        assert fusion_blocks in ["midup", "full"], "fusion type should be midup or full"
+        assert 0<=style_fidelity<=1, "make sure style_fidelity between 0 and 1"
         self.reference_attn = reference_attn
         self.fusion_blocks = fusion_blocks
         self.register_reference_hooks(
             mode, 
             do_classifier_free_guidance=do_classifier_free_guidance,
+            style_fidelity=style_fidelity,
         )
     
     def register_reference_hooks(
             self, 
             mode, 
             do_classifier_free_guidance=False,
+            style_fidelity=1.,
         ):
         MODE = mode
 
@@ -99,16 +103,18 @@ class ReferenceAttentionControl():
                     #     **cross_attention_kwargs,
                     # )
                     # ref_states -= attn_output[-ref_hidden_states.shape[0]:]
+                    attn_output_add = attn_output.clone()
                     if do_classifier_free_guidance: # or norm_hidden_states.shape[0]>ref_hidden_states.shape[0]
-                        if norm_hidden_states.shape[0]==2*ref_hidden_states.shape[0]:
-                            attn_output[-ref_hidden_states.shape[0]:] += ref_states
-                        else:
-                            raise ValueError("The tensor shape in the bank doesn't match hidden_states")
+                        assert norm_hidden_states.shape[0]==2*ref_hidden_states.shape[0], "The tensor shape in the bank doesn't match hidden_states"
+                        attn_output_add[-ref_hidden_states.shape[0]:] += ref_states
+                        if style_fidelity<1:
+                            mid = attn_output.shape[0]//2
+                            attn_output_add[:mid] = (1-style_fidelity)*(attn_output[:mid]+ref_states) + style_fidelity*attn_output_add[:mid]
                     else:
-                        attn_output += ref_states
+                        attn_output_add += ref_states
+                    attn_output = attn_output_add
 
                     self.bank.clear()
-
                     hidden_states = attn_output.clone()
                     if self.attn2 is not None:
                         # Cross-Attention

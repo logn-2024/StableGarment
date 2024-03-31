@@ -53,6 +53,7 @@ class StableGarmentPipeline(StableDiffusionPipeline):
         clip_skip: Optional[int] = None,
         callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        style_fidelity: float = 1.0,
         **kwargs,
     ):
         callback = kwargs.pop("callback", None)
@@ -70,10 +71,6 @@ class StableGarmentPipeline(StableDiffusionPipeline):
                 "1.0.0",
                 "Passing `callback_steps` as an input argument to `__call__` is deprecated, consider using `callback_on_step_end`",
             )
-
-        if garment_encoder is not None:
-            reference_control_writer = ReferenceAttentionControl(garment_encoder, mode='write', fusion_blocks='midup',do_classifier_free_guidance=False)
-            reference_control_reader = ReferenceAttentionControl(self.unet, mode='read', fusion_blocks='midup',do_classifier_free_guidance=True)
 
         # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
@@ -100,6 +97,11 @@ class StableGarmentPipeline(StableDiffusionPipeline):
         self._cross_attention_kwargs = cross_attention_kwargs
         self._interrupt = False
 
+        # after set _guidance_scale, we can use self.do_classifier_free_guidance
+        if garment_encoder is not None:
+            reference_control_writer = ReferenceAttentionControl(garment_encoder, mode='write', fusion_blocks='midup',do_classifier_free_guidance=False)
+            reference_control_reader = ReferenceAttentionControl(self.unet, mode='read', fusion_blocks='midup',do_classifier_free_guidance=self.do_classifier_free_guidance, style_fidelity=style_fidelity)
+
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -114,7 +116,6 @@ class StableGarmentPipeline(StableDiffusionPipeline):
         lora_scale = (
             self.cross_attention_kwargs.get("scale", None) if self.cross_attention_kwargs is not None else None
         )
-
         prompt_embeds, negative_prompt_embeds = self.encode_prompt(
             prompt,
             device,
@@ -154,11 +155,15 @@ class StableGarmentPipeline(StableDiffusionPipeline):
                 cloth_prompt, device, True, negative_cloth_prompt
             )
             cloth_text_embeddings = torch.cat([cloth_text_embeddings])
-            # for now we just use the conditional part
-            cloth_text_embeddings = cloth_text_embeddings[cloth_text_embeddings.shape[0]//2:]
             garment_embeds = self.prepare_garment_embeds(garment_image,device,prompt_embeds.dtype)
 
+            # just use the conditional part
+            cloth_text_embeddings = cloth_text_embeddings[cloth_text_embeddings.shape[0]//2:]
             assert batch_size==cloth_text_embeddings.shape[0]==garment_embeds.shape[0]
+
+            # use both unconditon and condition part
+            # garment_embeds = garment_embeds.repeat(2,1,1,1)
+            # assert batch_size*2==cloth_text_embeddings.shape[0]==garment_embeds.shape[0]
 
         # 4. Prepare timesteps
         timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, timesteps)
