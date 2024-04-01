@@ -1,0 +1,9 @@
+transformers
+torch
+torchvision
+diffusers
+spaces
+Pillow
+numpy
+accelerate
+einops
