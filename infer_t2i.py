@@ -5,7 +5,7 @@ from PIL import Image
 from diffusers import UniPCMultistepScheduler
 from diffusers import AutoencoderKL
 
-from stablegarment.models.appearance_encoder import AppearanceEncoderModel
+from stablegarment.models.garment_encoder import GarmentEncoderModel
 from stablegarment.piplines.pipeline_attn_text import StableGarmentPipeline
 
 import os
@@ -23,7 +23,7 @@ vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse").to(dtype=torch_
 pipeline = StableGarmentPipeline.from_pretrained(base_model, vae=vae, torch_dtype=torch_dtype, variant="fp16").to(device=device)
 pipeline.scheduler = UniPCMultistepScheduler.from_pretrained("runwayml/stable-diffusion-v1-5",subfolder="scheduler")
 
-garment_encoder = AppearanceEncoderModel.from_pretrained(pretrained_garment_encoder_path,torch_dtype=torch_dtype,subfolder="garment_encoder")
+garment_encoder = GarmentEncoderModel.from_pretrained(pretrained_garment_encoder_path,torch_dtype=torch_dtype,subfolder="garment_encoder")
 garment_encoder = garment_encoder.to(device=device,dtype=torch_dtype)
 garment_image = Image.open(garment_image_path).resize((width,height))
 garment_image = transforms.CenterCrop((height,width))(transforms.Resize(max(height, width))(garment_image))

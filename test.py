@@ -6,7 +6,7 @@ from diffusers import AutoencoderKL,UNet2DConditionModel
 from diffusers import DDPMScheduler, DDIMScheduler
 
 
-from stablegarment.models.appearance_encoder import AppearanceEncoderModel
+from stablegarment.models.garment_encoder import GarmentEncoderModel
 from stablegarment.models.controlnet import ControlNetModel
 
 from stablegarment.data.vitonhd import VITONHDInferenceDataset as VITONHDDataset
@@ -43,7 +43,7 @@ os.makedirs(target_dir, exist_ok=True)
 vae = AutoencoderKL.from_pretrained(pretrained_vae_model_path, subfolder="vae")
 controlnet = ControlNetModel.from_pretrained(pretrained_controlnet_path)
 unet = UNet2DConditionModel.from_pretrained(pretrained_model_name_or_path, subfolder="unet", use_safetensors=True, torch_dtype=weight_dtype)
-garment_encoder = AppearanceEncoderModel.from_pretrained(pretrained_garment_encoder_path, subfolder="garment_encoder")
+garment_encoder = GarmentEncoderModel.from_pretrained(pretrained_garment_encoder_path, subfolder="garment_encoder")
 
 tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_name_or_path, subfolder="tokenizer")
 text_encoder = CLIPTextModel.from_pretrained(pretrained_model_name_or_path, subfolder="text_encoder")

@@ -1,3 +1,3 @@
-from .appearance_encoder import AppearanceEncoderModel
+from .garment_encoder import GarmentEncoderModel
 from .controlnet import ControlNetModel
 from .self_attention_modules import ReferenceAttentionControl

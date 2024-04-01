@@ -8,7 +8,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from diffusers.schedulers import DDIMScheduler
 from diffusers.models import AutoencoderKL,UNet2DConditionModel
 
-from stablegarment.models.appearance_encoder import AppearanceEncoderModel
+from stablegarment.models.garment_encoder import GarmentEncoderModel
 from stablegarment.models.controlnet import ControlNetModel
 from stablegarment.piplines.pipeline_densepose_attn_text import StableGarmentControlNetPipeline
 
@@ -43,7 +43,7 @@ controlnet = ControlNetModel.from_pretrained(pretrained_model_path,subfolder="co
 text_encoder = CLIPTextModel.from_pretrained(base_model_path, subfolder='text_encoder')
 tokenizer = CLIPTokenizer.from_pretrained(base_model_path, subfolder='tokenizer')
 unet = UNet2DConditionModel.from_pretrained(base_model_path, subfolder='unet')
-garment_encoder = AppearanceEncoderModel.from_pretrained(pretrained_model_path, subfolder="garment_encoder")
+garment_encoder = GarmentEncoderModel.from_pretrained(pretrained_model_path, subfolder="garment_encoder")
 scheduler = DDIMScheduler.from_pretrained(base_model_path, subfolder="scheduler")
 pipeline = StableGarmentControlNetPipeline(
     vae,

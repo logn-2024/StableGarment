@@ -123,7 +123,7 @@ class UNet2DConditionOutput(BaseOutput):
     sample: torch.FloatTensor = None
 
 
-class AppearanceEncoderModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
+class GarmentEncoderModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
     r"""
     A conditional 2D UNet model that takes a noisy sample, conditional state, and a timestep and returns a sample
     shaped output.

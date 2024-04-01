@@ -1,4 +1,4 @@
-from stablegarment.models.appearance_encoder import AppearanceEncoderModel
+from stablegarment.models.garment_encoder import GarmentEncoderModel
 from stablegarment.models.controlnet import ControlNetModel
 from stablegarment.models.self_attention_modules import ReferenceAttentionControl
 
@@ -9,7 +9,7 @@ __all__ = [
     "data",
     "models",
     "pipelines",
-    "AppearanceEncoderModel",
+    "GarmentEncoderModel",
     "ControlNetModel",
     "ReferenceAttentionControl",
     "StableGarmentPipeline",
