@@ -18,33 +18,33 @@ pip3 install -r requirements.txt
 ```
 
 ## Demos, Models and Data
-You can follow [VITON-HD](https://github.com/shadow2496/VITON-HD) and [Dress Code](https://github.com/aimagelab/dress-code) to get VITON-HD and Dress Code dataset respectively. You may run the following command to generate mask for Dress Code dataset and place it in corresponding directory before test.
+To acquire the VITON-HD dataset, refer to [VITON-HD](https://github.com/shadow2496/VITON-HD). Similarly, for the Dress Code dataset, visit [Dress Code](https://github.com/aimagelab/dress-code). Before testing, ensure to generate masks for the Dress Code dataset using the following command and place them in the respective directories.
 ```bash
 python stablegarment/data/generate_mask.py
 ```
-You can get pretrained garment encoder for text2img from [this](https://huggingface.co/loooooong/StableGarment_text2img) huggingface Repository. Our huggingface demo is available here [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/loooooong/StableGarment). You can also run the demo locally:
+You can access the pretrained garment encoder for text-to-image task from [this](https://huggingface.co/loooooong/StableGarment_text2img) huggingface Repository. Our huggingface demo is available here [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/loooooong/StableGarment). To run the demo locally, execute the following command:
 ```bash
 python app.py
 ```
 
 ## Inference
-Run following command to perform text2img task with garment condition. You can change base model to get different style.
+To conduct the text-to-image task with garment conditions, execute the following command. You can alter the base model to achieve different styles:
 ```bash
 python infer_t2i.py
 ```
-Try-on task requires more inputs, mostly related to human. You can find corresponding extra inputs from VITON-HD and Dress Code dataset. If you want to perform virtual try-on on arbitrary images, you should get densepose and agnostic mask as these in the VITON-HD dataset. To perform virtual try-on application, Run following code for example:
+The try-on task necessitates additional inputs, primarily concerning humans. These inputs can be found in the VITON-HD and Dress Code datasets. If you intend to perform virtual try-on on arbitrary images, ensure you obtain densepose and agnostic masks akin to those in the VITON-HD dataset. To utilize the virtual try-on application, run the following code:
 ```bash
 python infer_tryon.py
 ```
 
 ## Test
-To test StableGarment for VITON-HD dataset, run following command:
+To test StableGarment on the VITON-HD dataset, execute the following command:
 ```bash
 python test.py
 ```
-You can change paired and unpaired setting by changeing is_pair variable. To test Dress Code dataset, just replace related variables and load target dataset in the test.py. 
+You can adjust between paired and unpaired settings by modifying the is_pair variable. For testing on the Dress Code dataset, simply substitute the relevant variables and load the target dataset in test.py.
 
-**Acknowledgements** 
+## Acknowledgements
 
 Thanks to [magic-animate](https://github.com/magic-research/magic-animate/), our code is heavily based on it. 
 

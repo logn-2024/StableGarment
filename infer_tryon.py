@@ -1,3 +1,4 @@
+import os
 import torch
 
 from PIL import Image
@@ -74,4 +75,5 @@ images = pipeline(prompts, negative_prompt="",cloth_prompt=cloth_prompt, # negat
                   controlnet_condition=controlnet_condition,reference_image=garment_images, 
                   garment_encoder=garment_encoder,condition_extra=image_agn,
                   generator=generator,).images
+os.makedirs("results",exist_ok=True)
 images[0].save("results/sample.jpg")
