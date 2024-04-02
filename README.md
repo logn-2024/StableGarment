@@ -22,7 +22,10 @@ You can follow [VITON-HD](https://github.com/shadow2496/VITON-HD) and [Dress Cod
 ```bash
 python stablegarment/data/generate_mask.py
 ```
-You can get pretrained garment encoder for text2img from [this](https://huggingface.co/loooooong/StableGarment_text2img) huggingface Repository. Our huggingface demo is available here [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/loooooong/StableGarment).
+You can get pretrained garment encoder for text2img from [this](https://huggingface.co/loooooong/StableGarment_text2img) huggingface Repository. Our huggingface demo is available here [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/loooooong/StableGarment). You can also run the demo locally:
+```bash
+python app.py
+```
 
 ## Inference
 Run following command to perform text2img task with garment condition. You can change base model to get different style.

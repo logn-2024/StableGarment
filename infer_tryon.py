@@ -56,7 +56,7 @@ pipeline = StableGarmentControlNetPipeline(
 garment_encoder = garment_encoder.to(device=device,dtype=torch_dtype)
 
 garment_image = Image.open("./assets/images/garment/00126_00.jpg").resize((width,height))
-densepose_image = Image.open("./assets/images/image_parse/13987_00_densepose.jpg").resize((width,height))
+densepose_image = Image.open("./assets/images/image_parse/13987_00_densepose.png").resize((width,height))
 image_agn_mask = Image.open("./assets/images/image_parse/13987_00_mask.png").resize((width,height))
 image_agn = Image.open("./assets/images/image_parse/13987_00_agn.jpg").resize((width,height))
 
