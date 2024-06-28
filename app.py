@@ -11,13 +11,14 @@ from torchvision import transforms
 from transformers import CLIPTextModel, CLIPTokenizer
 from transformers.models.clip.image_processing_clip import CLIPImageProcessor
 
-from diffusers import UniPCMultistepScheduler
+from diffusers import UniPCMultistepScheduler, DDIMScheduler
 from diffusers import AutoencoderKL
 from diffusers import StableDiffusionPipeline
 from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 
 from stablegarment.models import GarmentEncoderModel,ControlNetModel
-from stablegarment.piplines import StableGarmentPipeline,StableGarmentControlNetPipeline
+from stablegarment.pipelines import StableGarmentPipeline
+from stablegarment.pipelines import StableGarmentControlNetTryonPipeline
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 torch_dtype = torch.bfloat16 if device=="cpu" else torch.float16
@@ -39,21 +40,22 @@ pipeline_t2i.safety_checker = StableDiffusionSafetyChecker.from_pretrained("runw
 pipeline_t2i.feature_extractor = CLIPImageProcessor.from_pretrained("runwayml/stable-diffusion-v1-5", torch_dtype=torch_dtype, subfolder="feature_extractor")
 
 pipeline_tryon = None
-'''
-# not ready
-pretrained_model_path = "part_module_controlnet_imp2"
+
+pretrained_model_path = "loooooong/StableGarment_tryon"
 controlnet = ControlNetModel.from_pretrained(pretrained_model_path,subfolder="controlnet")
+garment_encoder_2 = GarmentEncoderModel.from_pretrained(pretrained_model_path,subfolder="garment_encoder").to(device=device,dtype=torch_dtype)
 text_encoder = CLIPTextModel.from_pretrained(base_model_path, subfolder='text_encoder')
 tokenizer = CLIPTokenizer.from_pretrained(base_model_path, subfolder='tokenizer')
-pipeline_tryon = StableGarmentControlNetPipeline(
-    vae,
-    text_encoder, 
-    tokenizer,
-    pipeline_t2i.unet,
-    controlnet,
-    scheduler,
+scheduler = DDIMScheduler.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="scheduler")
+pipeline_tryon = StableGarmentControlNetTryonPipeline.from_pretrained(
+    base_model_path,
+    vae=vae,
+    text_encoder=text_encoder, 
+    tokenizer=tokenizer,
+    unet=pipeline_t2i.unet,
+    controlnet=controlnet,
+    scheduler=scheduler,
 ).to(device=device,dtype=torch_dtype)
-'''
 
 def prepare_controlnet_inputs(agn_mask_list,densepose_list):
     for i,agn_mask_img in enumerate(agn_mask_list):
@@ -77,14 +79,15 @@ def tryon(prompt,init_image,garment_top,garment_down,):
 
     garment_images = [garment_top,]
     prompt = [prompt,]
-    cloth_prompt = ["",]
+    garment_prompt = ["",]
     controlnet_condition = prepare_controlnet_inputs([image_agn_mask],[densepose_image]).type(torch_dtype)
 
-    images = pipeline_tryon(prompt, negative_prompt="",cloth_prompt=cloth_prompt, # negative_cloth_prompt = n_prompt,
-                  height=height,width=width,num_inference_steps=25,guidance_scale=1.5,eta=0.0,
-                  controlnet_condition=controlnet_condition,reference_image=garment_images, 
-                  garment_encoder=garment_encoder,condition_extra=image_agn,
-                  generator=None,).images
+    images = pipeline_tryon(prompt, negative_prompt=[""]*len(garment_images),garment_prompt=garment_prompt, # negative_cloth_prompt = n_prompt,
+                  control_image = [Image.new('RGB', (width, height), (0,0,0))]*len(garment_images),
+                  height=height,width=width,num_inference_steps=25,guidance_scale=2.5,eta=0.0,
+                  controlnet_condition=controlnet_condition,garment_image=garment_images,controlnet_conditioning_scale=1.0,
+                  garment_encoder=garment_encoder_2,condition_extra=image_agn,num_images_per_prompt=1,
+                  generator=None,fusion_blocks="full",).images
     return images[0]
 
 def text2image(prompt,init_image,garment_top,garment_down,style_fidelity=1.):
@@ -100,7 +103,7 @@ def text2image(prompt,init_image,garment_top,garment_down,style_fidelity=1.):
     n_prompt = "nsfw, unsaturated, abnormal, unnatural, artifact"
     negative_prompt = [n_prompt]
     
-    images = pipeline_t2i(prompt,negative_prompt=negative_prompt,cloth_prompt=cloth_prompt,height=height,width=width,
+    images = pipeline_t2i(prompt,negative_prompt=negative_prompt,garment_prompt=cloth_prompt,height=height,width=width,
                     num_inference_steps=30,guidance_scale=cfg,num_images_per_prompt=1,style_fidelity=style_fidelity,
                     garment_encoder=garment_encoder,garment_image=garment_images,).images
     return images[0]
@@ -115,7 +118,7 @@ def infer(prompt,init_image,garment_top,garment_down,t2i_only,style_fidelity):
         return tryon(prompt,init_image,garment_top,garment_down)
 
 init_state,prompt_state = None,""
-t2i_only_state = True
+t2i_only_state = False
 def set_mode(t2i_only,person_condition,prompt):
     global init_state, prompt_state, t2i_only_state
     t2i_only_state = not t2i_only_state
@@ -134,25 +137,26 @@ def example_fn(inputs,):
         return gr.Image(sources='clipboard', type="filepath", label="model", value=None, interactive=False)
     return gr.Image(sources='clipboard', type="filepath", label="model",value=inputs, interactive=False)
 
-gr.set_static_paths(paths=["assets/images/model"])
+gr.set_static_paths(paths=[opj(os.path.dirname(__file__), "assets/images/model")])
 model_dir = opj(os.path.dirname(__file__), "assets/images/model")
 garment_dir = opj(os.path.dirname(__file__), "assets/images/garment")
 parse_dir = opj(os.path.dirname(__file__), "assets/images/image_parse")
 
 model = opj(model_dir, "13987_00.jpg")
 all_person = [opj(model_dir,fname) for fname in os.listdir(model_dir) if fname.endswith(".jpg")]
-with gr.Blocks(css = ".output-image, .input-image, .image-preview {height: 400px !important} ", ) as gradio_app:
+with gr.Blocks(css = ".output-image, .input-image, .image-preview {height: 400px !important} ") as gradio_app:
     gr.Markdown("# StableGarment")
     gr.Markdown("Demo for [StableGarment: Garment-Centric Generation via Stable Diffusion](https://arxiv.org/abs/2403.10783).")
     with gr.Row():
         with gr.Column():
-            init_image = gr.Image(sources='clipboard', type="filepath", label="model", value=None, interactive=False)
-            example = gr.Examples(inputs=gr.Image(visible=False), #init_image,
+            init_image = gr.Image(sources='clipboard', type="filepath", label="model", value=model, interactive=False,)
+            example = gr.Examples(inputs=init_image, #gr.Image(visible=False), #
                                   examples_per_page=4,
                                   examples=all_person,
                                   run_on_click=True,
                                   outputs=init_image,
-                                  fn=example_fn,)
+                                  fn=example_fn,
+                                  cache_examples=False,)
         with gr.Column():
             with gr.Row():
                 images_top = [opj(garment_dir,fname) for fname in os.listdir(garment_dir) if fname.endswith(".jpg")]
@@ -165,9 +169,9 @@ with gr.Blocks(css = ".output-image, .input-image, .image-preview {height: 400px
                 example_down = gr.Examples(inputs=garment_down,
                                             examples_per_page=4,
                                             examples=images_down)
-            prompt = gr.Textbox(placeholder="", label="prompt(for t2i)",) # interactive=False
+            prompt = gr.Textbox(placeholder="a photo of model", label="prompt(for t2i)",) # interactive=False
             with gr.Row():
-                t2i_only = gr.Checkbox(label="t2i with garment", info="Only text and garment.", elem_id="t2i_switch", value=True, interactive=False,)
+                t2i_only = gr.Checkbox(label="t2i with garment", info="Only text and garment.", elem_id="t2i_switch", value=False, interactive=True,)
                 run_button = gr.Button(value="Run")
                 t2i_only.change(fn=set_mode,inputs=[t2i_only,init_image,prompt],outputs=[init_image,prompt,])
             with gr.Accordion("advance options", open=False):

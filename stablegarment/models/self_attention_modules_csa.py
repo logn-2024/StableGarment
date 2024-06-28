@@ -7,7 +7,6 @@ from torch.nn.parallel import DistributedDataParallel
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import copy
 
 def torch_dfs(model: torch.nn.Module):
     result = [model]
@@ -79,7 +78,7 @@ class ReferenceAttentionControl():
                 )
             else:
                 if MODE == "write":
-                    self.bank.append(norm_hidden_states) # .clone()
+                    self.bank.append(norm_hidden_states)
                     attn_output = self.attn1(
                         norm_hidden_states,
                         encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
@@ -94,42 +93,35 @@ class ReferenceAttentionControl():
                         **cross_attention_kwargs,
                     )
                 elif MODE == "read":
-                    attn_output = self.attn1(norm_hidden_states, 
-                                            encoder_hidden_states=norm_hidden_states,
-                                            attention_mask=attention_mask,
-                                            **cross_attention_kwargs,)
-                    attn_output += hidden_states
+                    ref_hidden_states = torch.cat(self.bank, dim=1).to(device=norm_hidden_states.device,dtype=norm_hidden_states.dtype).repeat_interleave(repeats,dim=0)
                     
-                    # NEVER change self.bank which affect next iteration!
-                    ref_hidden_states = torch.cat(self.bank,dim=1).to(device=attn_output.device,dtype=attn_output.dtype).repeat_interleave(repeats,dim=0)
-                    
-                    # additive self-attention
-                    # make sure the input of to_q and to_k/to_v have the same batch dim    
-                    ref_states = self.attn1(norm_hidden_states[-ref_hidden_states.shape[0]:], 
-                                         encoder_hidden_states=ref_hidden_states, #torch.cat(self.bank, dim=1),
-                                         attention_mask=attention_mask if attention_mask is None else attention_mask[-ref_hidden_states.shape[0]:],
-                                         **cross_attention_kwargs,)
                     # vanilla attention with reference
-                    # ref_states = self.attn1(
-                    #     norm_hidden_states[-ref_hidden_states.shape[0]:],
-                    #     encoder_hidden_states=torch.cat([norm_hidden_states[-ref_hidden_states.shape[0]:],ref_hidden_states], dim=1),
-                    #     # attention_mask=attention_mask,
-                    #     **cross_attention_kwargs,
-                    # )
-                    # ref_states -= attn_output[-ref_hidden_states.shape[0]:]
-                    attn_output_add = attn_output#.clone()
+                    num_repeat = norm_hidden_states.shape[0]//ref_hidden_states.shape[0]
+                    ref_states = self.attn1(
+                        norm_hidden_states,
+                        encoder_hidden_states=torch.cat([norm_hidden_states,ref_hidden_states.repeat(num_repeat,1,1)], dim=1),
+                        # attention_mask=attention_mask,
+                        **cross_attention_kwargs,
+                    )
+                    ref_states += hidden_states
+
+                    attn_output_vanilla = None
                     if do_classifier_free_guidance: # or norm_hidden_states.shape[0]>ref_hidden_states.shape[0]
-                        assert norm_hidden_states.shape[0]==2*ref_hidden_states.shape[0], "The tensor shape in the bank doesn't match hidden_states"
-                        attn_output_add[-ref_hidden_states.shape[0]:] += ref_states
+                        attn_output_vanilla = self.attn1(norm_hidden_states, 
+                                                encoder_hidden_states=norm_hidden_states,
+                                                attention_mask=attention_mask,
+                                                **cross_attention_kwargs,)
+                        attn_output_vanilla += hidden_states
+                        mid = attn_output_vanilla.shape[0]//2
+                        attn_output_vanilla[-mid:] = ref_states[-mid:]
                         if style_fidelity<1:
-                            mid = attn_output.shape[0]//2
-                            attn_output_add[:mid] = (1-style_fidelity)*(attn_output[:mid]+ref_states) + style_fidelity*attn_output_add[:mid]
+                            attn_output_vanilla[:mid] = (1-style_fidelity)*ref_states[:mid] + style_fidelity*attn_output_vanilla[:mid]
                     else:
-                        attn_output_add += ref_states
-                    attn_output = attn_output_add
+                        attn_output_vanilla = ref_states
+                    attn_output = attn_output_vanilla
 
                     self.bank.clear()
-                    hidden_states = attn_output
+                    hidden_states = attn_output.clone()
                     if self.attn2 is not None:
                         # Cross-Attention
                         norm_hidden_states = (
@@ -179,6 +171,7 @@ class ReferenceAttentionControl():
 
             return hidden_states
 
+
         if self.reference_attn:
             if self.fusion_blocks == "midup":
                 if isinstance(self.unet, DistributedDataParallel):
@@ -190,11 +183,11 @@ class ReferenceAttentionControl():
             attn_modules = sorted(attn_modules, key=lambda x: -x.norm1.normalized_shape[0])
 
             for i, module in enumerate(attn_modules):
-                if not hasattr(module,"_original_inner_forward"):
-                    module._original_inner_forward = module.forward
+                module._original_inner_forward = module.forward
                 module.forward = hacked_basic_transformer_inner_forward.__get__(module, BasicTransformerBlock)
                 module.bank = []
                 module.attn_weight = float(i) / float(len(attn_modules))
+    
 
     def share_bank(self, writer, dtype=torch.float16, num_repeat=1):
         if self.reference_attn:

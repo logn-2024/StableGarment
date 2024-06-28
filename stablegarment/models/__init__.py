@@ -1,3 +1,4 @@
 from .garment_encoder import GarmentEncoderModel
+from .controlnet_lora import ControlLoRAModel
 from .controlnet import ControlNetModel
 from .self_attention_modules import ReferenceAttentionControl

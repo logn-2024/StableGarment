@@ -1,2 +1,0 @@
-from .pipeline_attn_text import StableGarmentPipeline
-from .pipeline_densepose_attn_text import StableGarmentControlNetPipeline

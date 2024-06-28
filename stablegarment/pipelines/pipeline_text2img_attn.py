@@ -34,8 +34,8 @@ class StableGarmentPipeline(StableDiffusionPipeline):
         timesteps: List[int] = None,
         guidance_scale: float = 7.5,
         negative_prompt: Optional[Union[str, List[str]]] = None,
-        cloth_prompt: Optional[Union[str, List[str]]] = None,
-        # negative_cloth_prompt: Optional[Union[str, List[str]]] = None,
+        garment_prompt: Optional[Union[str, List[str]]] = None,
+        # negative_garment_prompt: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
         eta: float = 0.0,
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
@@ -54,6 +54,7 @@ class StableGarmentPipeline(StableDiffusionPipeline):
         callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
         style_fidelity: float = 1.0,
+        fusion_blocks='midup', # 'full', # 
         **kwargs,
     ):
         callback = kwargs.pop("callback", None)
@@ -99,9 +100,10 @@ class StableGarmentPipeline(StableDiffusionPipeline):
 
         # after set _guidance_scale, we can use self.do_classifier_free_guidance
         if garment_encoder is not None:
-            reference_control_writer = ReferenceAttentionControl(garment_encoder, mode='write', fusion_blocks='midup',do_classifier_free_guidance=False)
-            reference_control_reader = ReferenceAttentionControl(self.unet, mode='read', fusion_blocks='midup',do_classifier_free_guidance=self.do_classifier_free_guidance, style_fidelity=style_fidelity)
-
+            reference_control_writer = ReferenceAttentionControl(garment_encoder, mode='write', fusion_blocks=fusion_blocks,do_classifier_free_guidance=False)
+            reference_control_reader = ReferenceAttentionControl(self.unet, mode='read', fusion_blocks=fusion_blocks,do_classifier_free_guidance=self.do_classifier_free_guidance, 
+                                                                style_fidelity=style_fidelity,repeats=num_images_per_prompt)
+            reference_control_reader.share_bank(reference_control_writer)
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -145,25 +147,25 @@ class StableGarmentPipeline(StableDiffusionPipeline):
 
         # convert garment_image to latent for garment encoder
         if garment_image is not None:
-            # encode cloth prompt
-            if not isinstance(cloth_prompt, torch.Tensor):
-                cloth_prompt = cloth_prompt if isinstance(cloth_prompt, list) else [cloth_prompt] * batch_size
-            negative_cloth_prompt = ""
-            if negative_cloth_prompt is not None:
-                negative_cloth_prompt = negative_cloth_prompt if isinstance(negative_cloth_prompt, list) else [negative_cloth_prompt] * batch_size
-            cloth_text_embeddings = self._encode_prompt(
-                cloth_prompt, device, True, negative_cloth_prompt
+            # encode garment prompt
+            if not isinstance(garment_prompt, torch.Tensor):
+                garment_prompt = garment_prompt if isinstance(garment_prompt, list) else [garment_prompt] * batch_size
+            negative_garment_prompt = ""
+            if negative_garment_prompt is not None:
+                negative_garment_prompt = negative_garment_prompt if isinstance(negative_garment_prompt, list) else [negative_garment_prompt] * batch_size
+            garment_text_embeddings = self._encode_prompt(
+                garment_prompt, device, True, negative_garment_prompt
             )
-            cloth_text_embeddings = torch.cat([cloth_text_embeddings])
+            garment_text_embeddings = torch.cat([garment_text_embeddings])
             garment_embeds = self.prepare_garment_embeds(garment_image,device,prompt_embeds.dtype)
 
             # just use the conditional part
-            cloth_text_embeddings = cloth_text_embeddings[cloth_text_embeddings.shape[0]//2:]
-            assert batch_size==cloth_text_embeddings.shape[0]==garment_embeds.shape[0]
+            garment_text_embeddings = garment_text_embeddings[-garment_embeds.shape[0]:]
+            assert batch_size==garment_text_embeddings.shape[0]==garment_embeds.shape[0]
 
             # use both unconditon and condition part
             # garment_embeds = garment_embeds.repeat(2,1,1,1)
-            # assert batch_size*2==cloth_text_embeddings.shape[0]==garment_embeds.shape[0]
+            # assert batch_size*2==garment_text_embeddings.shape[0]==garment_embeds.shape[0]
 
         # 4. Prepare timesteps
         timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, timesteps)
@@ -206,15 +208,14 @@ class StableGarmentPipeline(StableDiffusionPipeline):
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
-                
+
                 if garment_encoder is not None:
                     garment_encoder(
                         garment_embeds,
                         t,
-                        encoder_hidden_states=cloth_text_embeddings,
+                        encoder_hidden_states=garment_text_embeddings,
                         return_dict=False,
                     )
-                    reference_control_reader.update(reference_control_writer,dtype=garment_embeds.dtype,num_repeat=num_images_per_prompt)
 
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents] * 2) if self.do_classifier_free_guidance else latents
@@ -262,7 +263,11 @@ class StableGarmentPipeline(StableDiffusionPipeline):
                 
                 if garment_encoder is not None:
                     reference_control_writer.clear() 
-                    reference_control_reader.clear() 
+                    reference_control_reader.clear()
+        
+        if garment_encoder is not None:
+            reference_control_reader.reset()
+            reference_control_writer.reset()
 
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[

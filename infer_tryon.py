@@ -11,7 +11,7 @@ from diffusers.models import AutoencoderKL,UNet2DConditionModel
 
 from stablegarment.models.garment_encoder import GarmentEncoderModel
 from stablegarment.models.controlnet import ControlNetModel
-from stablegarment.piplines.pipeline_densepose_attn_text import StableGarmentControlNetPipeline
+from stablegarment.pipelines.pipeline_controlnet_tryon_attn import StableGarmentControlNetTryonPipeline
 
 def prepare_controlnet_inputs(agn_mask_list,densepose_list):
     for i,agn_mask_img in enumerate(agn_mask_list):
@@ -26,33 +26,31 @@ def prepare_controlnet_inputs(agn_mask_list,densepose_list):
     controlnet_inputs = torch.stack(controlnet_inputs)
     return controlnet_inputs
 
-device = "cuda:3"
-torch_dtype = torch.float16
-height = 512
-width = 384
-seed = None
+device = "cuda:0" # "cpu"
+torch_dtype = torch.float32 if device=="cpu" else torch.float16
+height = 512 # between 512 and 1024 
+width = 384 # between 384 and 768
+seed = 42
 if seed is not None:
     generator = torch.Generator(device=device).manual_seed(seed)
 else:
     generator = None
 
-pretrained_model_path = "part_module_controlnet_imp2"
-base_model_path = "runwayml/stable-diffusion-v1-5"
+pretrained_model_path = "loooooong/StableGarment_tryon"
+base_model_path = "SG161222/Realistic_Vision_V4.0_noVAE" # runwayml/stable-diffusion-v1-5
 vae_path = "stabilityai/sd-vae-ft-mse"
 vae = AutoencoderKL.from_pretrained(vae_path)
-controlnet = ControlNetModel.from_pretrained(pretrained_model_path,subfolder="controlnet")
-text_encoder = CLIPTextModel.from_pretrained(base_model_path, subfolder='text_encoder')
-tokenizer = CLIPTokenizer.from_pretrained(base_model_path, subfolder='tokenizer')
 unet = UNet2DConditionModel.from_pretrained(base_model_path, subfolder='unet')
 garment_encoder = GarmentEncoderModel.from_pretrained(pretrained_model_path, subfolder="garment_encoder")
+controlnet = ControlNetModel.from_pretrained(pretrained_model_path,subfolder="controlnet",ignore_mismatched_sizes=True,low_cpu_mem_usage=False)
 scheduler = DDIMScheduler.from_pretrained(base_model_path, subfolder="scheduler")
-pipeline = StableGarmentControlNetPipeline(
-    vae,
-    text_encoder, 
-    tokenizer,
-    unet,
-    controlnet,
-    scheduler,
+pipeline = StableGarmentControlNetTryonPipeline.from_pretrained(
+    base_model_path,
+    vae=vae,
+    unet=unet,
+    controlnet=controlnet,
+    scheduler=scheduler,
+    torch_dtype=torch_dtype,
 ).to(device=device,dtype=torch_dtype)
 garment_encoder = garment_encoder.to(device=device,dtype=torch_dtype)
 
@@ -61,19 +59,23 @@ densepose_image = Image.open("./assets/images/image_parse/13987_00_densepose.png
 image_agn_mask = Image.open("./assets/images/image_parse/13987_00_mask.png").resize((width,height))
 image_agn = Image.open("./assets/images/image_parse/13987_00_agn.jpg").resize((width,height))
 
-prompts = ["a photo of a woman", ]
-cloth_prompt = ["",]
+prompts = ["a photo of a woman, full body", ]
+garment_prompt = ["",]
 
 garment_images = [garment_image]
-densepose_image = [densepose_image]
-image_agn_mask = [image_agn_mask]
-image_agn = [image_agn]
-controlnet_condition = prepare_controlnet_inputs(image_agn_mask,densepose_image)
+densepose_images = [densepose_image]
+image_agn_masks = [image_agn_mask]
+image_agns = [image_agn]
 
-images = pipeline(prompts, negative_prompt="",cloth_prompt=cloth_prompt, # negative_cloth_prompt = n_prompt,
-                  height=height,width=width,num_inference_steps=25,guidance_scale=1.5,eta=0.0,
-                  controlnet_condition=controlnet_condition,reference_image=garment_images, 
-                  garment_encoder=garment_encoder,condition_extra=image_agn,
-                  generator=generator,).images
+# image_agns, image_agn_masks = None, [Image.new('L', (width, height), 255) for _ in image_agn_masks] # generate without person and background control
+# densepose_images = [Image.new('RGB', (width, height), (0,0,0)) for _ in densepose_images] # generate without densepose control
+controlnet_condition = prepare_controlnet_inputs(image_agn_masks,densepose_images)
+images = pipeline(prompts, negative_prompt=[""]*len(garment_images),garment_prompt=garment_prompt,
+    control_image = [Image.new('RGB', (width, height), (0,0,0))]*len(garment_images),
+    height=height,width=width,num_inference_steps=25,guidance_scale=2.5,eta=0.0,
+    controlnet_condition=controlnet_condition,garment_image=garment_images,controlnet_conditioning_scale=1.0,
+    garment_encoder=garment_encoder,condition_extra=image_agns,num_images_per_prompt=1,
+    generator=generator,fusion_blocks="full",
+).images
 os.makedirs("results",exist_ok=True)
-images[0].save("results/sample.jpg")
+images[0].save("./results/sample.jpg")

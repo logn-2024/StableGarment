@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'stablegarment',
   packages = find_packages(),
-  version = '0.1.0',
+  version = '0.2.0',
   license='cc-by-nc-4.0',
   description = 'StableGarmet Official Implementation',
   author = 'Hailong Guo',

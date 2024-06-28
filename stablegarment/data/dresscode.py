@@ -13,8 +13,7 @@ from os.path import join as opj
 from .utils import imread,ImageAugmentation
 from ..utils.util import tokenize_prompt
 
-
-class VITONHDDataset(Dataset):
+class DressCodeDataset(Dataset):
     def __init__(
             self, 
             data_root_dir, 
@@ -24,8 +23,9 @@ class VITONHDDataset(Dataset):
             tokenizer_2=None,
             is_paired=True, 
             is_test=False, 
-            is_sorted=False,  
-            repeat=1,    
+            is_sorted=False,
+            category="upper_body",
+            repeat=1,
             **kwargs
         ):
         self.drd = data_root_dir
@@ -34,24 +34,27 @@ class VITONHDDataset(Dataset):
         self.pair_key = "paired" if is_paired else "unpaired"
         self.data_type = "train" if not is_test else "test"
         self.is_test = is_test
+        self.category = category
         self.repeat = repeat
        
         assert not (self.data_type == "train" and self.pair_key == "unpaired"), "train must use paired dataset"
-        
+        self.drd = opj(self.drd,category)
+
         im_names = []
         c_names = []
-        with open(opj(self.drd, f"{self.data_type}_pairs.txt"), "r") as f:
+        pairs_txt_name = f"test_pairs_{self.pair_key}.txt" if self.data_type=="test" else "train_pairs.txt"
+        with open(opj(self.drd, pairs_txt_name), "r") as f:
             for line in f.readlines():
                 im_name, c_name = line.strip().split()
                 im_names.append(im_name)
                 c_names.append(c_name)
-        
+
         self.img_text_data,self.garment_text_data = {},{}
-        image_caption_json = opj(self.drd, f"{self.data_type}_image_text.json")
+        image_caption_json = opj(self.drd, "img_cnt.json")
         if os.path.exists(image_caption_json):
             with open(image_caption_json, "r") as f:
                 self.img_text_data = json.load(f)
-        garment_caption_json = opj(self.drd, f"{self.data_type}_cloth_text.json")
+        garment_caption_json = opj(self.drd, "cloth_cnt.json")
         if os.path.exists(garment_caption_json):
             with open(garment_caption_json, "r") as f:
                 self.garment_text_data = json.load(f)
@@ -62,26 +65,26 @@ class VITONHDDataset(Dataset):
         for c_name in c_names:
             if c_name not in self.garment_text_data:
                 self.garment_text_data[c_name] = ""
-            
+    
         if is_sorted:
             im_names, c_names = zip(*sorted(zip(im_names, c_names)))
         self.im_names = im_names
+        # self.text_names = new_text_dict
         self.tokenizer = tokenizer
         self.tokenizer_2 = tokenizer_2
         self.c_names = dict()
-        self.c_names["paired"] = im_names
+        self.c_names["paired"] = c_names
         self.c_names["unpaired"] = c_names
-
         self.null_id = tokenize_prompt(self.tokenizer, "")
         if self.tokenizer_2 is not None:
             self.null_id_2 = tokenize_prompt(self.tokenizer_2, "")
-
+        
         self.augmentation = ImageAugmentation(**kwargs)
 
         self.start_signal = True
     def __len__(self):
         return int(len(self.im_names)*self.repeat)
-        
+
     def __getitem__(self, idx):
         if not self.start_signal:
             return {}
@@ -89,7 +92,7 @@ class VITONHDDataset(Dataset):
         img_fn = self.im_names[idx]
         garment_fn = self.c_names[self.pair_key][idx]
 
-        img_text_cnt = "a photo of a woman" if self.is_test else self.img_text_data[img_fn]
+        img_text_cnt = "a photo of a model" if self.is_test else self.img_text_data[img_fn]
         img_text_token_ids = tokenize_prompt(self.tokenizer,img_text_cnt)[0]
         garment_text_cnt = self.garment_text_data[garment_fn]
         garment_text_token_ids = tokenize_prompt(self.tokenizer,garment_text_cnt)[0]
@@ -97,19 +100,18 @@ class VITONHDDataset(Dataset):
             img_text_token_ids_2 = tokenize_prompt(self.tokenizer_2, img_text_cnt)[0]
             garment_text_token_ids_2 = tokenize_prompt(self.tokenizer_2, garment_text_cnt)[0]
 
-        agn = imread(opj(self.drd, self.data_type, "agnostic-v3.2", img_fn), self.img_H, self.img_W)
-        # Note: [agnostic_mask_official -> agnostic-mask, 00006_00.jpg -> 00006_00_mask.png]
-        mask_name = os.path.splitext(img_fn)[0]+"_mask.png" # self.im_names[idx]
-        agn_mask = imread(opj(self.drd, self.data_type, "agnostic-mask", mask_name), self.img_H, self.img_W, is_mask=True)
+        version_suffix = "-v2"
+        agn = imread(opj(self.drd, "agnostic"+version_suffix, img_fn), self.img_H, self.img_W)
+        agn_mask = imread(opj(self.drd, "agnostic-mask"+version_suffix, img_fn), self.img_H, self.img_W, is_mask=True)
+        garment = imread(opj(self.drd, "images", garment_fn), self.img_H, self.img_W)
 
-        garment = imread(opj(self.drd, self.data_type, "cloth", garment_fn), self.img_H, self.img_W)
-        image = imread(opj(self.drd, self.data_type, "image", img_fn), self.img_H, self.img_W)
-        image_densepose = imread(opj(self.drd, self.data_type, "image-densepose", img_fn), self.img_H, self.img_W)
-        
+        image = imread(opj(self.drd, "images", img_fn), self.img_H, self.img_W)
+        image_densepose = imread(opj(self.drd, "densepose", img_fn), self.img_H, self.img_W)
+
         if not self.is_test:
             # augmentation
             agn, agn_mask, garment, image, image_densepose = self.augmentation(agn, agn_mask, garment, image, image_densepose)
-        
+
         agn_mask = np.array(agn_mask)
         agn_mask = (agn_mask >= 128).astype(np.float32)  # 0 or 1
         agn_mask = agn_mask[:,:,None]

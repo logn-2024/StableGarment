@@ -9,8 +9,8 @@ from diffusers import DDPMScheduler, DDIMScheduler
 from stablegarment.models.garment_encoder import GarmentEncoderModel
 from stablegarment.models.controlnet import ControlNetModel
 
-from stablegarment.data.vitonhd import VITONHDInferenceDataset as VITONHDDataset
-from stablegarment.data.dresscode_dataset import DressCodeInferenceDataset as DressCodeDataset
+from stablegarment.data.vitonhd import VITONHDDataset
+from stablegarment.data.dresscode import DressCodeDataset
 from stablegarment.models.self_attention_modules import ReferenceAttentionControl
 
 import os
@@ -20,6 +20,7 @@ import random
 
 from PIL import Image
 import numpy as np
+import cv2
 
 seed = 42
 # seed all
@@ -31,16 +32,20 @@ device = 'cuda:0'
 weight_dtype = torch.float16
 
 pretrained_vae_model_path = "stabilityai/sd-vae-ft-mse"
-pretrained_model_name_or_path = "runwayml/stable-diffusion-v1-5"
-pretrained_controlnet_path = "part_module_controlnet_imp2/controlnet"
-pretrained_garment_encoder_path = "part_module_controlnet_imp2/garment_encoder"
+pretrained_model_name_or_path = "SG161222/Realistic_Vision_V4.0_noVAE" #"runwayml/stable-diffusion-v1-5"
+pretrained_controlnet_path = "loooooong/StableGarment_tryon/controlnet"
+pretrained_garment_encoder_path = "loooooong/StableGarment_tryon/garment_encoder"
 
-root_data_dir = "data/VITON-HD/zalando-hd-resized"
-# root_data_dir = "data/DressCode"
-target_dir =  "./results/test_tryon-asa"
+
+vton_root_dir = "/tiamat-vePFS/share_data/hailong/data/zalando-hd-resized"
+drcd_root_dir = "data/DressCode"
+target_dir =  "./results/vthd_tryon"
 os.makedirs(target_dir, exist_ok=True)
+os.makedirs(opj(target_dir, "samples"), exist_ok=True)
+os.makedirs(opj(target_dir, "compare"), exist_ok=True)
 
 vae = AutoencoderKL.from_pretrained(pretrained_vae_model_path, subfolder="vae")
+vae.enable_slicing()
 controlnet = ControlNetModel.from_pretrained(pretrained_controlnet_path)
 unet = UNet2DConditionModel.from_pretrained(pretrained_model_name_or_path, subfolder="unet", use_safetensors=True, torch_dtype=weight_dtype)
 garment_encoder = GarmentEncoderModel.from_pretrained(pretrained_garment_encoder_path, subfolder="garment_encoder")
@@ -49,64 +54,60 @@ tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_name_or_path, subfold
 text_encoder = CLIPTextModel.from_pretrained(pretrained_model_name_or_path, subfolder="text_encoder")
 
 noise_scheduler = DDPMScheduler.from_pretrained(pretrained_model_name_or_path, subfolder="scheduler")
-noise_scheduler_kwargs = {
-    "beta_start": 0.00085,
-    "beta_end": 0.012,
-    "beta_schedule": "scaled_linear",
-    "clip_sample": False,
-    "steps_offset": 1
-}
-scheduler = DDIMScheduler(**noise_scheduler_kwargs)
+scheduler = DDIMScheduler.from_pretrained(pretrained_model_name_or_path, subfolder="scheduler")
 
-vae = vae.to(device, dtype=weight_dtype)
-unet = unet.to(device, dtype=weight_dtype)
-text_encoder = text_encoder.to(device, dtype=weight_dtype)
-controlnet = controlnet.to(device, dtype=weight_dtype)
-garment_encoder = garment_encoder.to(device, dtype=weight_dtype)
+vae = vae.to(device, dtype=weight_dtype).eval()
+unet = unet.to(device, dtype=weight_dtype).eval()
+text_encoder = text_encoder.to(device, dtype=weight_dtype).eval()
+controlnet = controlnet.to(device, dtype=weight_dtype).eval()
+garment_encoder = garment_encoder.to(device, dtype=weight_dtype).eval()
 
-img_H = 512
-img_W = 384
+img_H = 1024
+img_W = 768
 is_pair = False
 is_test = True
 is_sorted = True
 do_classifier_free_guidance = True
 num_inference_steps = 25
-guidance_scale = 1.5
-
+guidance_scale = 2.5
 
 # inference_data = DressCodeDataset(
-#     data_root_dir = root_data_dir,
+#     data_root_dir = drcd_root_dir,
 #     img_H = img_H,
 #     img_W = img_W,
 #     tokenizer = tokenizer,
 #     is_paired = is_pair,
 #     is_test = is_test,
 #     is_sorted = is_sorted,
+#     category = "upper_body", # "dresses", # "lower_body", # 
+#     p_flip=0., p_crop=0., p_rmask=0., 
 # )
 inference_data = VITONHDDataset(
-    data_root_dir = root_data_dir,
+    data_root_dir = vton_root_dir,
     img_H = img_H,
     img_W = img_W,
     tokenizer = tokenizer,
     is_paired = is_pair,
     is_test = is_test,
     is_sorted = is_sorted,
+    p_flip=0., p_crop=0., p_rmask=0., 
 )
 
 inference_data_loader = torch.utils.data.DataLoader(
     inference_data,
-    batch_size=2,
+    batch_size=64,
     shuffle=False,
     num_workers=0,
     drop_last=False,
 )
 
-reference_control_writer = ReferenceAttentionControl(garment_encoder, mode='write', fusion_blocks='midup',do_classifier_free_guidance=False)
-reference_control_reader = ReferenceAttentionControl(unet, mode='read', fusion_blocks='midup',do_classifier_free_guidance=True)
+reference_control_writer = ReferenceAttentionControl(garment_encoder, mode='write', fusion_blocks='full',do_classifier_free_guidance=False)
+reference_control_reader = ReferenceAttentionControl(unet, mode='read', fusion_blocks='full',do_classifier_free_guidance=True)
+reference_control_reader.share_bank(reference_control_writer)
 
 with torch.no_grad():
     for idx, batch in enumerate(inference_data_loader):
-        ref_latents = vae.encode(batch["cloth"].to(device=device, dtype=weight_dtype)).latent_dist.mean
+        ref_latents = vae.encode(batch["garment"].to(device=device, dtype=weight_dtype)).latent_dist.mean
         ref_latents = ref_latents * vae.config.scaling_factor
         agn_img_latents = vae.encode(batch["agn"].to(device=device, dtype=weight_dtype)).latent_dist.sample()
         agn_img_latents = agn_img_latents * vae.config.scaling_factor
@@ -124,11 +125,11 @@ with torch.no_grad():
         un_text_embeddings = text_encoder(un_text_input_ids)[0]
         text_embeddings = torch.cat([un_text_embeddings, text_embeddings], dim=0)
 
-        cloth_text_input_ids = batch["cloth_text_token_ids"].to(device)
-        cloth_text_embeddings = text_encoder(cloth_text_input_ids)[0]
-        un_cloth_text_input_ids = batch["null_token_id"].to(device)
-        un_cloth_text_embeddings = text_encoder(un_cloth_text_input_ids)[0]
-        cloth_text_embeddings = torch.cat([un_cloth_text_embeddings, cloth_text_embeddings], dim=0)
+        garment_text_input_ids = batch["garment_text_token_ids"].to(device)
+        garment_text_embeddings = text_encoder(garment_text_input_ids)[0]
+        un_garment_text_input_ids = batch["null_token_id"].to(device)
+        un_garment_text_embeddings = text_encoder(un_garment_text_input_ids)[0]
+        garment_text_embeddings = torch.cat([un_garment_text_embeddings, garment_text_embeddings], dim=0)
 
         image_latents = vae.encode(batch["image"].to(device=device, dtype=weight_dtype)).latent_dist.mean * vae.config.scaling_factor
 
@@ -162,7 +163,6 @@ with torch.no_grad():
                 return_dict=False,
             )
 
-            reference_control_reader.update(reference_control_writer,dtype=latent_model_input.dtype)
             noise_pred = unet(
                 latent_model_input, 
                 t, 
@@ -191,22 +191,29 @@ with torch.no_grad():
         for bz_idx in range(bz):
             sample = samples[bz_idx]
             sample = (sample * 255).astype(np.uint8)
-
+            
             src_img = torch.clamp((batch['image'] + 1) / 2, 0, 1)
             src_img = src_img.permute(0,2,3,1).cpu().numpy()[bz_idx]
             src_img = (src_img * 255).astype(np.uint8)
 
-            cloth_img = torch.clamp((batch['cloth'] + 1) / 2, 0, 1)
-            cloth_img = cloth_img.permute(0,2,3,1).cpu().numpy()[bz_idx]
-            cloth_img = (cloth_img * 255).astype(np.uint8)
+            garment_img = torch.clamp((batch['garment'] + 1) / 2, 0, 1)
+            garment_img = garment_img.permute(0,2,3,1).cpu().numpy()[bz_idx]
+            garment_img = (garment_img * 255).astype(np.uint8)
 
             densepose_img = torch.clamp((batch['image_densepose'] + 1) / 2, 0, 1)
             densepose_img = densepose_img.permute(0,2,3,1).cpu().numpy()[bz_idx]
             densepose_img = (densepose_img * 255).astype(np.uint8)
 
-            result = np.concatenate([src_img, cloth_img, densepose_img, sample], axis=1)
+            agn_img = torch.clamp((batch['agn'] + 1) / 2, 0, 1)
+            agn_img = agn_img.permute(0,2,3,1).cpu().numpy()[bz_idx]
+            agn_img = (agn_img * 255).astype(np.uint8)
+            
+            result = np.concatenate([src_img, garment_img, densepose_img, agn_img, sample], axis=1)
             result = Image.fromarray(result)
-            src_basename,ref_basename = os.path.basename(batch['img_fn'][bz_idx]),os.path.basename(batch['cloth_fn'][bz_idx])
+            src_basename,ref_basename = os.path.basename(batch['img_fn'][bz_idx]),os.path.basename(batch['garment_fn'][bz_idx])
             src_id,ref_id = os.path.splitext(src_basename)[0],os.path.splitext(ref_basename)[0]
-            basename = f"{src_id}-{ref_id}.png"
-            result.save(opj(target_dir, basename))
+            basename = f"{src_id}.png"
+            result.save(opj(target_dir,"compare",f"{src_id}-{ref_id}.png"))
+            Image.fromarray(np.concatenate([src_img, garment_img], axis=1)).save(opj(target_dir,"compare",f"{src_id}-{ref_id}-cond1.png"))
+            Image.fromarray(np.concatenate([agn_img, densepose_img], axis=1)).save(opj(target_dir,"compare",f"{src_id}-{ref_id}-cond2.png"))
+            cv2.imwrite(opj(target_dir,"samples",basename),sample[:,:,::-1])
