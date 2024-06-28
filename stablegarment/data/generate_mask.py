@@ -383,7 +383,7 @@ class DressCodeDataset(data.Dataset):
 if __name__=="__main__":
     outputlist = ['image', 'pose_map', 'inpaint_mask', 'im_mask', 'category', 'im_name', 'cloth']
     dataset_train = DressCodeDataset(
-        dataroot_path="/nas/data/public/ImageGen/DressCode/DressCode",
+        dataroot_path="data/DressCode",
         phase='test',
         order="paired",
         radius=5,

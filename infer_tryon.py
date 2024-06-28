@@ -59,7 +59,7 @@ densepose_image = Image.open("./assets/images/image_parse/13987_00_densepose.png
 image_agn_mask = Image.open("./assets/images/image_parse/13987_00_mask.png").resize((width,height))
 image_agn = Image.open("./assets/images/image_parse/13987_00_agn.jpg").resize((width,height))
 
-prompts = ["a photo of a woman, full body", ]
+prompts = ["a photo of a woman", ]
 garment_prompt = ["",]
 
 garment_images = [garment_image]

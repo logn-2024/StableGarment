@@ -37,7 +37,7 @@ pretrained_controlnet_path = "loooooong/StableGarment_tryon/controlnet"
 pretrained_garment_encoder_path = "loooooong/StableGarment_tryon/garment_encoder"
 
 
-vton_root_dir = "/tiamat-vePFS/share_data/hailong/data/zalando-hd-resized"
+vton_root_dir = "data/zalando-hd-resized"
 drcd_root_dir = "data/DressCode"
 target_dir =  "./results/vthd_tryon"
 os.makedirs(target_dir, exist_ok=True)
@@ -62,8 +62,8 @@ text_encoder = text_encoder.to(device, dtype=weight_dtype).eval()
 controlnet = controlnet.to(device, dtype=weight_dtype).eval()
 garment_encoder = garment_encoder.to(device, dtype=weight_dtype).eval()
 
-img_H = 1024
-img_W = 768
+img_H = 1024 # 512-1024
+img_W = 768 # 384-768
 is_pair = False
 is_test = True
 is_sorted = True
@@ -95,7 +95,7 @@ inference_data = VITONHDDataset(
 
 inference_data_loader = torch.utils.data.DataLoader(
     inference_data,
-    batch_size=64,
+    batch_size=4,
     shuffle=False,
     num_workers=0,
     drop_last=False,
@@ -213,7 +213,7 @@ with torch.no_grad():
             src_basename,ref_basename = os.path.basename(batch['img_fn'][bz_idx]),os.path.basename(batch['garment_fn'][bz_idx])
             src_id,ref_id = os.path.splitext(src_basename)[0],os.path.splitext(ref_basename)[0]
             basename = f"{src_id}.png"
-            result.save(opj(target_dir,"compare",f"{src_id}-{ref_id}.png"))
-            Image.fromarray(np.concatenate([src_img, garment_img], axis=1)).save(opj(target_dir,"compare",f"{src_id}-{ref_id}-cond1.png"))
-            Image.fromarray(np.concatenate([agn_img, densepose_img], axis=1)).save(opj(target_dir,"compare",f"{src_id}-{ref_id}-cond2.png"))
+            # result.save(opj(target_dir,"compare",f"{src_id}-{ref_id}.png"))
+            # Image.fromarray(np.concatenate([src_img, garment_img], axis=1)).save(opj(target_dir,"compare",f"{src_id}-{ref_id}-cond1.png"))
+            # Image.fromarray(np.concatenate([agn_img, densepose_img], axis=1)).save(opj(target_dir,"compare",f"{src_id}-{ref_id}-cond2.png"))
             cv2.imwrite(opj(target_dir,"samples",basename),sample[:,:,::-1])

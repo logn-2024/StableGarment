@@ -57,7 +57,7 @@ from diffusers.models.unet_2d_blocks import (
     get_up_block,
 )
 
-from diffusers.models.unets.unet_2d_blocks import CrossAttnUpBlock2D, UpBlock2D
+# from diffusers.models.unets.unet_2d_blocks import CrossAttnUpBlock2D, UpBlock2D
 # from diffusers.models.unet_2d_blocks import CrossAttnUpBlock2D, UpBlock2D
 from diffusers.models.unet_2d_condition import UNet2DConditionModel
 

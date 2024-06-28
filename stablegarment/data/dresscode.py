@@ -100,7 +100,7 @@ class DressCodeDataset(Dataset):
             img_text_token_ids_2 = tokenize_prompt(self.tokenizer_2, img_text_cnt)[0]
             garment_text_token_ids_2 = tokenize_prompt(self.tokenizer_2, garment_text_cnt)[0]
 
-        version_suffix = "-v2"
+        version_suffix = ""
         agn = imread(opj(self.drd, "agnostic"+version_suffix, img_fn), self.img_H, self.img_W)
         agn_mask = imread(opj(self.drd, "agnostic-mask"+version_suffix, img_fn), self.img_H, self.img_W, is_mask=True)
         garment = imread(opj(self.drd, "images", garment_fn), self.img_H, self.img_W)
