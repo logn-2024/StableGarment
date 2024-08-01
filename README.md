@@ -22,7 +22,7 @@ To acquire the VITON-HD dataset, refer to [VITON-HD](https://github.com/shadow24
 ```bash
 python stablegarment/data/generate_mask.py
 ```
-You can access the pretrained garment encoder for text-to-image task from [this](https://huggingface.co/loooooong/StableGarment_text2img) huggingface Repository and [this](https://huggingface.co/loooooong/StableGarment_tryon) for tryon. Our huggingface demo is available here [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/loooooong/StableGarment). To run the demo locally, execute the following command:
+You can access the pretrained garment encoder for text-to-image task from [this](https://huggingface.co/loooooong/StableGarment_text2img) huggingface Repository and [this](https://huggingface.co/loooooong/StableGarment_tryon) for tryon. For convenience, the tryon model is trained on both VITON-HD and Dress Code dataset in variable resolution, so the quality is not so good as the paper. Our huggingface demo is available here [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/loooooong/StableGarment). To run the demo locally, execute the following command:
 ```bash
 python app.py
 ```
@@ -32,7 +32,7 @@ To conduct the text-to-image task with garment conditions, execute the following
 ```bash
 python infer_t2i.py
 ```
-The try-on task necessitates additional inputs, primarily concerning humans. These inputs can be found in the VITON-HD and Dress Code datasets. If you intend to perform virtual try-on on arbitrary images, ensure you obtain densepose and agnostic masks akin to those in the VITON-HD dataset. To utilize the virtual try-on application, run the following code:
+The try-on task necessitates additional inputs, primarily concerning humans. These inputs can be found in the VITON-HD and Dress Code datasets. If you intend to perform virtual try-on on arbitrary images, ensure you obtain densepose and agnostic masks akin to those in the VITON-HD dataset(this [link](https://github.com/sangyun884/HR-VITON/issues/45) may be helpful). To utilize the virtual try-on application, run the following code:
 ```bash
 python infer_tryon.py
 ```
