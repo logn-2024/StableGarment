@@ -95,7 +95,7 @@ inference_data = VITONHDDataset(
 
 inference_data_loader = torch.utils.data.DataLoader(
     inference_data,
-    batch_size=4,
+    batch_size=8,
     shuffle=False,
     num_workers=0,
     drop_last=False,
@@ -148,7 +148,7 @@ with torch.no_grad():
             garment_encoder(
                 ref_latents[ref_latents.shape[0]//2:],
                 t,
-                encoder_hidden_states=text_embeddings[text_embeddings.shape[0]//2:],
+                encoder_hidden_states=garment_text_embeddings[garment_text_embeddings.shape[0]//2:],
                 return_dict=False,
             )
 

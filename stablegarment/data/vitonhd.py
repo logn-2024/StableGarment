@@ -89,9 +89,9 @@ class VITONHDDataset(Dataset):
         img_fn = self.im_names[idx]
         garment_fn = self.c_names[self.pair_key][idx]
 
-        img_text_cnt = "a photo of a woman" if self.is_test else self.img_text_data[img_fn]
+        img_text_cnt = "best quality, a photo of a woman wearing fashion garment" if self.is_test else self.img_text_data[img_fn]
         img_text_token_ids = tokenize_prompt(self.tokenizer,img_text_cnt)[0]
-        garment_text_cnt = self.garment_text_data[garment_fn]
+        garment_text_cnt = "upper body cloth" if self.is_test else self.garment_text_data[garment_fn]
         garment_text_token_ids = tokenize_prompt(self.tokenizer,garment_text_cnt)[0]
         if self.tokenizer_2 is not None:
             img_text_token_ids_2 = tokenize_prompt(self.tokenizer_2, img_text_cnt)[0]
@@ -139,11 +139,12 @@ class VITONHDDataset(Dataset):
             img_fn=img_fn,
             garment_fn=garment_fn,
         )
+        negative_prompt = "nsfw, bad quality, worst quality, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, disconnected limbs, mutation, mutated, ugly, disgusting, amputation"
         if self.tokenizer_2 is not None:
             example["img_text_token_ids_2"] = img_text_token_ids_2
             example["garment_text_token_ids_2"] = garment_text_token_ids_2
         if self.is_test:
-            example["null_token_id"] = tokenize_prompt(self.tokenizer, "")[0]
+            example["null_token_id"] = tokenize_prompt(self.tokenizer, negative_prompt)[0]
             if self.tokenizer_2 is not None:
-                example["null_token_id_2"] = tokenize_prompt(self.tokenizer_2, "")[0]
+                example["null_token_id_2"] = tokenize_prompt(self.tokenizer_2, negative_prompt)[0]
         return example
